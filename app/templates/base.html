@@ -50,7 +50,7 @@
                     <button onclick="toggleDark()" class="p-2 rounded-md hover:bg-gray-800 transition" title="Toggle theme">
                         <span id="theme-icon">&#9790;</span>
                     </button>
-                    <a href="/api/collect" class="text-xs px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 rounded-md transition">Sync</a>
+                    <button onclick="triggerSync(this)" class="text-xs px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 rounded-md transition" id="sync-btn">Sync</button>
                 </div>
             </div>
         </div>
@@ -86,6 +86,23 @@
             document.documentElement.classList.toggle('dark');
             const icon = document.getElementById('theme-icon');
             icon.textContent = document.documentElement.classList.contains('dark') ? '\u263E' : '\u2600';
+        }
+        async function triggerSync(btn) {
+            btn.disabled = true;
+            btn.textContent = 'Syncing...';
+            btn.classList.add('opacity-50');
+            try {
+                const resp = await fetch('/api/collect');
+                const data = await resp.json();
+                btn.textContent = data.status === 'collection started' ? 'Started!' : data.message || 'Error';
+            } catch(e) {
+                btn.textContent = 'Error';
+            }
+            setTimeout(() => {
+                btn.textContent = 'Sync';
+                btn.disabled = false;
+                btn.classList.remove('opacity-50');
+            }, 3000);
         }
     </script>
 </body>

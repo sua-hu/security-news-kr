@@ -13,7 +13,7 @@ from pathlib import Path
 
 from app import database as db
 from app.config import RSS_FEEDS
-from app.scheduler import start_scheduler, stop_scheduler, collect_and_translate
+from app.scheduler import start_scheduler, stop_scheduler, collect_and_translate, get_scheduler_status
 
 logging.basicConfig(
     level=logging.INFO,
@@ -192,7 +192,9 @@ async def search(
 
 @app.get("/api/stats")
 async def api_stats():
-    return await db.get_stats()
+    stats = await db.get_stats()
+    stats["scheduler"] = get_scheduler_status()
+    return stats
 
 
 _last_collect_time = None

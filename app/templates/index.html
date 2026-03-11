@@ -116,4 +116,22 @@
         </div>
     </div>
 </div>
+
+<!-- Auto-refresh stats every 60s -->
+<script>
+async function refreshStats() {
+    try {
+        const resp = await fetch('/api/stats');
+        const data = await resp.json();
+        const cards = document.querySelectorAll('[role="status"]');
+        const values = [data.articles, data.cves, data.kev, data.translated_articles, data.translated_cves];
+        cards.forEach((card, i) => {
+            if (values[i] !== undefined) {
+                card.querySelector('.text-2xl').textContent = values[i].toLocaleString();
+            }
+        });
+    } catch(e) {}
+}
+setInterval(refreshStats, 60000);
+</script>
 {% endblock %}
