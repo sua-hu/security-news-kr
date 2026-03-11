@@ -36,11 +36,10 @@ async def collect_rss_feeds():
     total = 0
 
     headers = {"User-Agent": "SecurityNewsKR/1.0 (RSS Reader)"}
-    async with httpx.AsyncClient(timeout=15, headers=headers) as client:
+    async with httpx.AsyncClient(timeout=30, headers=headers) as client:
         for source_name, feed_url in RSS_FEEDS.items():
             try:
-                resp = await client.get(feed_url, follow_redirects=True)
-                resp.raise_for_status()
+                resp = await client.get(feed_url, follow_redirects=True, timeout=15)
                 feed = feedparser.parse(resp.text)
 
                 count = 0

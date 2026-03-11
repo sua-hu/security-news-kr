@@ -1,8 +1,11 @@
 import aiosqlite
-import json
+import logging
+from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Optional
 from app.config import DATABASE_PATH
+
+logger = logging.getLogger(__name__)
 
 DB_PATH = DATABASE_PATH
 
@@ -51,26 +54,34 @@ CREATE TABLE IF NOT EXISTS collection_logs (
     error_message TEXT,
     collected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE INDEX IF NOT EXISTS idx_articles_source ON articles(source);
+CREATE INDEX IF NOT EXISTS idx_articles_published ON articles(published_at DESC);
+CREATE INDEX IF NOT EXISTS idx_cves_severity ON cves(severity);
+CREATE INDEX IF NOT EXISTS idx_cves_published ON cves(published_at DESC);
+CREATE INDEX IF NOT EXISTS idx_cves_is_kev ON cves(is_kev);
+CREATE INDEX IF NOT EXISTS idx_logs_source_date ON collection_logs(source, collected_at);
 """
 
 
+@asynccontextmanager
+async def _conn():
+    async with aiosqlite.connect(DB_PATH) as conn:
+        conn.row_factory = aiosqlite.Row
+        yield conn
+
+
 async def init_db():
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with _conn() as db:
         await db.executescript(SCHEMA)
         await db.commit()
-
-
-async def get_db():
-    db = await aiosqlite.connect(DB_PATH)
-    db.row_factory = aiosqlite.Row
-    return db
 
 
 # --- Articles ---
 
 async def insert_article(source: str, title: str, summary: str, url: str,
                          published_at: Optional[datetime] = None):
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with _conn() as db:
         try:
             await db.execute(
                 """INSERT OR IGNORE INTO articles (source, title, summary, url, published_at)
@@ -78,14 +89,13 @@ async def insert_article(source: str, title: str, summary: str, url: str,
                 (source, title, summary, url, published_at)
             )
             await db.commit()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Failed to insert article '{url}': {e}")
 
 
 async def get_articles(limit: int = 20, offset: int = 0, source: Optional[str] = None,
                        search: Optional[str] = None):
-    async with aiosqlite.connect(DB_PATH) as db:
-        db.row_factory = aiosqlite.Row
+    async with _conn() as db:
         conditions = []
         params = []
 
@@ -110,15 +120,14 @@ async def get_articles(limit: int = 20, offset: int = 0, source: Optional[str] =
 
 
 async def get_article_by_id(article_id: int):
-    async with aiosqlite.connect(DB_PATH) as db:
-        db.row_factory = aiosqlite.Row
+    async with _conn() as db:
         cursor = await db.execute("SELECT * FROM articles WHERE id = ?", (article_id,))
         row = await cursor.fetchone()
         return dict(row) if row else None
 
 
 async def get_articles_count(source: Optional[str] = None, search: Optional[str] = None):
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with _conn() as db:
         conditions = []
         params = []
         if source:
@@ -136,7 +145,7 @@ async def get_articles_count(source: Optional[str] = None, search: Optional[str]
 
 
 async def update_article_translation(article_id: int, title_ko: str, summary_ko: str):
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with _conn() as db:
         await db.execute(
             "UPDATE articles SET title_ko = ?, summary_ko = ? WHERE id = ?",
             (title_ko, summary_ko, article_id)
@@ -152,7 +161,7 @@ async def insert_cve(cve_id: str, description: str, severity: str,
                      references_json: Optional[str] = None,
                      published_at: Optional[datetime] = None,
                      is_kev: bool = False, kev_due_date: Optional[str] = None):
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with _conn() as db:
         try:
             await db.execute(
                 """INSERT OR IGNORE INTO cves
@@ -163,14 +172,13 @@ async def insert_cve(cve_id: str, description: str, severity: str,
                  affected_products, references_json, published_at, is_kev, kev_due_date)
             )
             await db.commit()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Failed to insert CVE '{cve_id}': {e}")
 
 
 async def get_cves(limit: int = 20, offset: int = 0, severity: Optional[str] = None,
                    search: Optional[str] = None):
-    async with aiosqlite.connect(DB_PATH) as db:
-        db.row_factory = aiosqlite.Row
+    async with _conn() as db:
         conditions = []
         params = []
 
@@ -179,7 +187,7 @@ async def get_cves(limit: int = 20, offset: int = 0, severity: Optional[str] = N
             params.append(severity)
         if search:
             conditions.append("(cve_id LIKE ? OR description LIKE ? OR description_ko LIKE ?)")
-            params.extend([f"%{search}%", f"%{search}%", f"%{search}%"])
+            params.extend([f"%{search}%"] * 3)
 
         where = "WHERE " + " AND ".join(conditions) if conditions else ""
         params.extend([limit, offset])
@@ -193,15 +201,14 @@ async def get_cves(limit: int = 20, offset: int = 0, severity: Optional[str] = N
 
 
 async def get_cve_by_id(cve_id: str):
-    async with aiosqlite.connect(DB_PATH) as db:
-        db.row_factory = aiosqlite.Row
+    async with _conn() as db:
         cursor = await db.execute("SELECT * FROM cves WHERE cve_id = ?", (cve_id,))
         row = await cursor.fetchone()
         return dict(row) if row else None
 
 
 async def get_cves_count(severity: Optional[str] = None, search: Optional[str] = None):
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with _conn() as db:
         conditions = []
         params = []
         if severity:
@@ -209,7 +216,7 @@ async def get_cves_count(severity: Optional[str] = None, search: Optional[str] =
             params.append(severity)
         if search:
             conditions.append("(cve_id LIKE ? OR description LIKE ? OR description_ko LIKE ?)")
-            params.extend([f"%{search}%", f"%{search}%", f"%{search}%"])
+            params.extend([f"%{search}%"] * 3)
         where = "WHERE " + " AND ".join(conditions) if conditions else ""
         cursor = await db.execute(f"SELECT COUNT(*) FROM cves {where}", params)
         row = await cursor.fetchone()
@@ -217,7 +224,7 @@ async def get_cves_count(severity: Optional[str] = None, search: Optional[str] =
 
 
 async def update_cve_translation(cve_id: str, description_ko: str):
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with _conn() as db:
         await db.execute(
             "UPDATE cves SET description_ko = ? WHERE cve_id = ?",
             (description_ko, cve_id)
@@ -226,7 +233,7 @@ async def update_cve_translation(cve_id: str, description_ko: str):
 
 
 async def mark_cve_as_kev(cve_id: str, due_date: Optional[str] = None):
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with _conn() as db:
         await db.execute(
             "UPDATE cves SET is_kev = 1, kev_due_date = ? WHERE cve_id = ?",
             (due_date, cve_id)
@@ -235,8 +242,7 @@ async def mark_cve_as_kev(cve_id: str, due_date: Optional[str] = None):
 
 
 async def get_kev_cves(limit: int = 20, offset: int = 0):
-    async with aiosqlite.connect(DB_PATH) as db:
-        db.row_factory = aiosqlite.Row
+    async with _conn() as db:
         cursor = await db.execute(
             "SELECT * FROM cves WHERE is_kev = 1 ORDER BY published_at DESC LIMIT ? OFFSET ?",
             (limit, offset)
@@ -246,8 +252,7 @@ async def get_kev_cves(limit: int = 20, offset: int = 0):
 
 
 async def get_untranslated_articles(limit: int = 50):
-    async with aiosqlite.connect(DB_PATH) as db:
-        db.row_factory = aiosqlite.Row
+    async with _conn() as db:
         cursor = await db.execute(
             """SELECT * FROM articles
                WHERE title_ko IS NULL OR title_ko = title
@@ -259,8 +264,7 @@ async def get_untranslated_articles(limit: int = 50):
 
 
 async def get_untranslated_cves(limit: int = 100):
-    async with aiosqlite.connect(DB_PATH) as db:
-        db.row_factory = aiosqlite.Row
+    async with _conn() as db:
         cursor = await db.execute(
             """SELECT * FROM cves
                WHERE description IS NOT NULL
@@ -275,7 +279,7 @@ async def get_untranslated_cves(limit: int = 100):
 # --- Translation Cache ---
 
 async def get_cached_translation(text_hash: str):
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with _conn() as db:
         cursor = await db.execute(
             "SELECT translated FROM translation_cache WHERE hash = ?", (text_hash,)
         )
@@ -284,7 +288,7 @@ async def get_cached_translation(text_hash: str):
 
 
 async def save_translation_cache(text_hash: str, original: str, translated: str):
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with _conn() as db:
         await db.execute(
             """INSERT OR REPLACE INTO translation_cache (hash, original, translated, char_count)
                VALUES (?, ?, ?, ?)""",
@@ -297,7 +301,7 @@ async def save_translation_cache(text_hash: str, original: str, translated: str)
 
 async def log_collection(source: str, status: str, items_count: int = 0,
                          error_message: Optional[str] = None):
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with _conn() as db:
         await db.execute(
             """INSERT INTO collection_logs (source, status, items_count, error_message)
                VALUES (?, ?, ?, ?)""",
@@ -307,7 +311,7 @@ async def log_collection(source: str, status: str, items_count: int = 0,
 
 
 async def get_stats():
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with _conn() as db:
         article_count = (await (await db.execute("SELECT COUNT(*) FROM articles")).fetchone())[0]
         cve_count = (await (await db.execute("SELECT COUNT(*) FROM cves")).fetchone())[0]
         kev_count = (await (await db.execute("SELECT COUNT(*) FROM cves WHERE is_kev = 1")).fetchone())[0]

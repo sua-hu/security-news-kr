@@ -2,14 +2,16 @@ import hashlib
 import httpx
 import logging
 import asyncio
-import json
-from typing import List, Optional, Tuple
+from typing import Optional, Tuple
 from app.config import DEEPL_API_KEY, DEEPL_API_URL
 from app import database as db
 
 logger = logging.getLogger(__name__)
 
 GOOGLE_TRANSLATE_URL = "https://translate.googleapis.com/translate_a/single"
+
+# Limit concurrent API calls to avoid rate limiting
+_api_semaphore = asyncio.Semaphore(3)
 
 
 def text_hash(text: str) -> str:
@@ -48,7 +50,6 @@ async def _translate_google(client: httpx.AsyncClient, text: str) -> Optional[st
         )
         resp.raise_for_status()
         data = resp.json()
-        # Response format: [[["translated","original",...],...]...]
         if data and data[0]:
             parts = [segment[0] for segment in data[0] if segment and segment[0]]
             translated = "".join(parts)
@@ -79,19 +80,25 @@ async def translate_text(text: str, client: Optional[httpx.AsyncClient] = None) 
         client = httpx.AsyncClient(timeout=15)
 
     try:
-        translated = None
+        async with _api_semaphore:
+            translated = None
 
-        # Try DeepL if configured
-        if DEEPL_API_KEY:
-            translated = await _translate_deepl(client, text)
+            # Try DeepL if configured
+            if DEEPL_API_KEY:
+                translated = await _translate_deepl(client, text)
 
-        # Fallback to Google Translate (free, no key)
-        if not translated:
-            translated = await _translate_google(client, text)
+            # Fallback to Google Translate
+            if not translated:
+                translated = await _translate_google(client, text)
 
-        if translated and translated != text:
-            await db.save_translation_cache(h, text, translated)
-            return translated, True
+            # Retry Google once after delay if both failed
+            if not translated:
+                await asyncio.sleep(1)
+                translated = await _translate_google(client, text)
+
+            if translated and translated != text:
+                await db.save_translation_cache(h, text, translated)
+                return translated, True
     finally:
         if own_client:
             await client.aclose()
@@ -103,13 +110,18 @@ async def translate_untranslated_articles(limit: int = 200):
     """Translate articles that don't have Korean translations yet."""
     articles = await db.get_untranslated_articles(limit=limit)
     count = 0
+    cached_count = 0
     async with httpx.AsyncClient(timeout=15) as client:
         for article in articles:
             title_ko, used_api_1 = await translate_text(article["title"], client)
+            if not used_api_1:
+                cached_count += 1
             summary_ko = ""
             used_api_2 = False
             if article.get("summary"):
                 summary_ko, used_api_2 = await translate_text(article["summary"], client)
+                if not used_api_2:
+                    cached_count += 1
 
             if title_ko != article["title"] or (summary_ko and summary_ko != article.get("summary")):
                 await db.update_article_translation(article["id"], title_ko, summary_ko)
@@ -118,7 +130,7 @@ async def translate_untranslated_articles(limit: int = 200):
             if used_api_1 or used_api_2:
                 await asyncio.sleep(0.2)
 
-    logger.info(f"Translated {count} articles")
+    logger.info(f"Translated {count} articles (cached: {cached_count})")
     return count
 
 
@@ -126,10 +138,13 @@ async def translate_untranslated_cves(limit: int = 500):
     """Translate CVEs that don't have Korean translations yet. KEV entries are prioritized."""
     cves = await db.get_untranslated_cves(limit=limit)
     count = 0
+    cached_count = 0
     errors = 0
     async with httpx.AsyncClient(timeout=15) as client:
         for cve in cves:
             desc_ko, used_api = await translate_text(cve["description"], client)
+            if not used_api:
+                cached_count += 1
             if desc_ko != cve["description"]:
                 await db.update_cve_translation(cve["cve_id"], desc_ko)
                 count += 1
@@ -142,5 +157,5 @@ async def translate_untranslated_cves(limit: int = 500):
             if used_api:
                 await asyncio.sleep(0.2)
 
-    logger.info(f"Translated {count} CVEs")
+    logger.info(f"Translated {count} CVEs (cached: {cached_count}, errors: {errors})")
     return count

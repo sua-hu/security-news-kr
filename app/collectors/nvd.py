@@ -46,7 +46,9 @@ async def collect_nvd_cves(days: int = 120):
             }
 
             resp = await client.get(NVD_API_URL, params=params, headers=headers)
-            resp.raise_for_status()
+            if resp.status_code != 200:
+                logger.warning(f"NVD API returned {resp.status_code}: {resp.text[:200]}")
+                break
             data = resp.json()
 
             total_results = data.get("totalResults", 0)
