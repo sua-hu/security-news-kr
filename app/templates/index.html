@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - Security News KR{% endblock %}
+{% block content %}
+
+<!-- Stats -->
+<div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+    <div class="bg-gray-900 rounded-lg p-4 border border-gray-800">
+        <div class="text-2xl font-bold text-emerald-400">{{ stats.articles }}</div>
+        <div class="text-sm text-gray-400">News</div>
+    </div>
+    <div class="bg-gray-900 rounded-lg p-4 border border-gray-800">
+        <div class="text-2xl font-bold text-blue-400">{{ stats.cves }}</div>
+        <div class="text-sm text-gray-400">CVEs</div>
+    </div>
+    <div class="bg-gray-900 rounded-lg p-4 border border-gray-800">
+        <div class="text-2xl font-bold text-red-400">{{ stats.kev }}</div>
+        <div class="text-sm text-gray-400">KEV</div>
+    </div>
+    <div class="bg-gray-900 rounded-lg p-4 border border-gray-800">
+        <div class="text-2xl font-bold text-purple-400">{{ stats.translated_articles }}</div>
+        <div class="text-sm text-gray-400">Translated News</div>
+    </div>
+    <div class="bg-gray-900 rounded-lg p-4 border border-gray-800">
+        <div class="text-2xl font-bold text-purple-400">{{ stats.translated_cves }}</div>
+        <div class="text-sm text-gray-400">Translated CVEs</div>
+    </div>
+</div>
+
+<div class="grid lg:grid-cols-3 gap-6">
+    <!-- Recent News -->
+    <div class="lg:col-span-2">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-xl font-bold">Latest News</h2>
+            <a href="/news" class="text-sm text-emerald-400 hover:underline">View All &rarr;</a>
+        </div>
+        <div class="space-y-3">
+            {% for article in articles %}
+            <a href="/news/{{ article.id }}" class="block bg-gray-900 rounded-lg p-4 border border-gray-800 hover:border-emerald-600 transition">
+                <div class="flex items-start justify-between">
+                    <div class="flex-1">
+                        <h3 class="font-semibold text-white mb-1">
+                            {{ article.title_ko or article.title }}
+                        </h3>
+                        {% if article.title_ko %}
+                        <p class="text-xs text-gray-500 mb-2">{{ article.title }}</p>
+                        {% endif %}
+                        <p class="text-sm text-gray-400 line-clamp-2">
+                            {{ article.summary_ko or article.summary or '' }}
+                        </p>
+                    </div>
+                </div>
+                <div class="flex items-center mt-3 space-x-3 text-xs text-gray-500">
+                    <span class="px-2 py-0.5 bg-gray-800 rounded">{{ article.source }}</span>
+                    {% if article.published_at %}
+                    <span>{{ article.published_at[:10] if article.published_at is string else article.published_at }}</span>
+                    {% endif %}
+                </div>
+            </a>
+            {% else %}
+            <div class="bg-gray-900 rounded-lg p-8 border border-gray-800 text-center text-gray-500">
+                <p>Collecting data... Refresh in a moment.</p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="space-y-6">
+        <!-- CISA KEV Alerts -->
+        {% if kev_cves %}
+        <div>
+            <h2 class="text-xl font-bold mb-4 text-red-400">CISA KEV Alerts</h2>
+            <div class="space-y-2">
+                {% for cve in kev_cves %}
+                <a href="/cves/{{ cve.cve_id }}" class="block bg-gray-900 rounded-lg p-3 border border-red-900 hover:border-red-600 transition">
+                    <div class="font-mono text-sm text-red-400">{{ cve.cve_id }}</div>
+                    <p class="text-xs text-gray-400 mt-1 line-clamp-2">
+                        {{ cve.description_ko or cve.description or '' }}
+                    </p>
+                    {% if cve.kev_due_date %}
+                    <div class="text-xs text-red-500 mt-1">Due: {{ cve.kev_due_date }}</div>
+                    {% endif %}
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Critical/High CVEs -->
+        <div>
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-xl font-bold">Critical CVEs</h2>
+                <a href="/cves?severity=CRITICAL" class="text-sm text-emerald-400 hover:underline">View All &rarr;</a>
+            </div>
+            <div class="space-y-2">
+                {% for cve in cves[:8] %}
+                <a href="/cves/{{ cve.cve_id }}" class="block bg-gray-900 rounded-lg p-3 border border-gray-800 hover:border-gray-600 transition">
+                    <div class="flex items-center justify-between">
+                        <span class="font-mono text-sm">{{ cve.cve_id }}</span>
+                        <span class="text-xs px-2 py-0.5 rounded border severity-{{ cve.severity|lower if cve.severity else 'unknown' }}">
+                            {% if cve.cvss_score %}{{ cve.cvss_score }}{% endif %}
+                            {{ cve.severity or 'N/A' }}
+                        </span>
+                    </div>
+                    <p class="text-xs text-gray-400 mt-1 line-clamp-2">
+                        {{ cve.description_ko or cve.description or '' }}
+                    </p>
+                </a>
+                {% endfor %}
+                {% if not cves %}
+                <div class="bg-gray-900 rounded-lg p-4 border border-gray-800 text-center text-gray-500 text-sm">
+                    Loading CVE data...
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

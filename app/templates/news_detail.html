@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}{{ article.title_ko or article.title }} - Security News KR{% endblock %}
+{% block content %}
+
+<div class="max-w-3xl mx-auto">
+    <a href="/news" class="text-sm text-emerald-400 hover:underline mb-4 inline-block">&larr; Back to News</a>
+
+    <article class="bg-gray-900 rounded-lg p-6 border border-gray-800">
+        <div class="flex items-center space-x-3 mb-4 text-sm text-gray-500">
+            <span class="px-2 py-0.5 bg-gray-800 rounded">{{ article.source }}</span>
+            {% if article.published_at %}
+            <span>{{ article.published_at }}</span>
+            {% endif %}
+        </div>
+
+        <h1 class="text-2xl font-bold text-white mb-2">
+            {{ article.title_ko or article.title }}
+        </h1>
+
+        {% if article.title_ko %}
+        <p class="text-sm text-gray-500 mb-4">{{ article.title }}</p>
+        {% endif %}
+
+        <div class="border-t border-gray-800 my-4"></div>
+
+        {% if article.summary_ko %}
+        <div class="prose prose-invert max-w-none">
+            <h3 class="text-lg font-semibold text-emerald-400 mb-2">Summary (KO)</h3>
+            <p class="text-gray-300 leading-relaxed">{{ article.summary_ko }}</p>
+        </div>
+        {% endif %}
+
+        {% if article.summary %}
+        <div class="mt-4">
+            <h3 class="text-lg font-semibold text-gray-400 mb-2">Original Summary</h3>
+            <p class="text-gray-500 leading-relaxed">{{ article.summary }}</p>
+        </div>
+        {% endif %}
+
+        <div class="mt-6">
+            <a href="{{ article.url }}" target="_blank" rel="noopener"
+               class="inline-flex items-center px-4 py-2 bg-emerald-600 hover:bg-emerald-700 rounded-md transition text-sm">
+                Read Original Article &rarr;
+            </a>
+        </div>
+    </article>
+</div>
+{% endblock %}

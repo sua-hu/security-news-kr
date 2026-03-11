@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}{{ cve.cve_id }} - Security News KR{% endblock %}
+{% block content %}
+
+<div class="max-w-4xl mx-auto">
+    <a href="/cves" class="text-sm text-emerald-400 hover:underline mb-4 inline-block">&larr; Back to CVE List</a>
+
+    <div class="bg-gray-900 rounded-lg p-6 border border-gray-800">
+        <!-- Header -->
+        <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
+            <div>
+                <h1 class="text-2xl font-bold font-mono text-white">{{ cve.cve_id }}</h1>
+                <div class="flex items-center gap-2 mt-2">
+                    <span class="text-sm px-3 py-1 rounded border severity-{{ cve.severity|lower if cve.severity else 'unknown' }}">
+                        {{ cve.severity or 'UNKNOWN' }}
+                    </span>
+                    {% if cve.cvss_score %}
+                    <span class="text-sm text-gray-400">CVSS: <strong class="text-white">{{ cve.cvss_score }}</strong></span>
+                    {% endif %}
+                    {% if cve.is_kev %}
+                    <span class="text-sm px-3 py-1 bg-red-900 text-red-400 rounded border border-red-700">CISA KEV</span>
+                    {% endif %}
+                    <span class="text-sm px-2 py-1 bg-gray-800 text-gray-400 rounded">{{ cve.source }}</span>
+                </div>
+            </div>
+            {% if cve.published_at %}
+            <div class="text-sm text-gray-500">Published: {{ cve.published_at }}</div>
+            {% endif %}
+        </div>
+
+        {% if cve.kev_due_date %}
+        <div class="bg-red-900/30 border border-red-800 rounded-md p-4 mb-6">
+            <div class="text-red-400 font-semibold">CISA KEV Due Date: {{ cve.kev_due_date }}</div>
+            <p class="text-sm text-red-300 mt-1">This vulnerability is actively exploited. Remediation required by the due date.</p>
+        </div>
+        {% endif %}
+
+        <!-- Description -->
+        <div class="border-t border-gray-800 pt-6">
+            {% if cve.description_ko %}
+            <h2 class="text-lg font-semibold text-emerald-400 mb-3">Description (KO)</h2>
+            <p class="text-gray-300 leading-relaxed mb-6">{{ cve.description_ko }}</p>
+            {% endif %}
+
+            {% if cve.description %}
+            <h2 class="text-lg font-semibold text-gray-400 mb-3">Original Description</h2>
+            <p class="text-gray-500 leading-relaxed">{{ cve.description }}</p>
+            {% endif %}
+        </div>
+
+        <!-- Affected Products -->
+        {% set products = cve.affected_products | parse_json %}
+        {% if products %}
+        <div class="border-t border-gray-800 mt-6 pt-6">
+            <h2 class="text-lg font-semibold text-gray-300 mb-3">Affected Products</h2>
+            <div class="flex flex-wrap gap-2">
+                {% for product in products %}
+                <span class="px-3 py-1 bg-gray-800 rounded-md text-sm text-gray-300 font-mono">{{ product }}</span>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- References -->
+        {% set refs = cve.references_json | parse_json %}
+        {% if refs %}
+        <div class="border-t border-gray-800 mt-6 pt-6">
+            <h2 class="text-lg font-semibold text-gray-300 mb-3">References</h2>
+            <ul class="space-y-2">
+                {% for ref in refs %}
+                <li>
+                    <a href="{{ ref }}" target="_blank" rel="noopener"
+                       class="text-emerald-400 hover:underline text-sm break-all">{{ ref }}</a>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% block title %}Search - Security News KR{% endblock %}
+{% block content %}
+
+<div class="mb-6">
+    <h1 class="text-2xl font-bold mb-4">Search</h1>
+    <form action="/search" method="get">
+        <div class="flex gap-2">
+            <input type="text" name="q" value="{{ q }}" placeholder="Search news & CVEs (EN/KO)..." autofocus
+                   class="flex-1 px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-md text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-emerald-500 transition">
+            <button type="submit" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 rounded-md text-sm font-medium transition">Search</button>
+        </div>
+    </form>
+</div>
+
+{% if q.strip() %}
+
+<!-- News Results -->
+<div class="mb-10">
+    <div class="flex items-center justify-between mb-4">
+        <h2 class="text-lg font-semibold">News <span class="text-gray-500 font-normal text-sm">({{ articles|length }})</span></h2>
+        {% if articles|length >= 20 %}
+        <a href="/news?search={{ q }}" class="text-sm text-emerald-400 hover:text-emerald-300 transition">View all &rarr;</a>
+        {% endif %}
+    </div>
+
+    {% if articles %}
+    <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {% for article in articles %}
+        <a href="/news/{{ article.id }}" class="bg-gray-900 rounded-lg p-5 border border-gray-800 hover:border-emerald-600 transition flex flex-col">
+            <h3 class="font-semibold text-white mb-2">
+                {{ article.title_ko or article.title }}
+            </h3>
+            {% if article.title_ko %}
+            <p class="text-xs text-gray-500 mb-2">{{ article.title }}</p>
+            {% endif %}
+            <p class="text-sm text-gray-400 line-clamp-3 flex-1">
+                {{ article.summary_ko or article.summary or '' }}
+            </p>
+            <div class="flex items-center mt-4 space-x-3 text-xs text-gray-500">
+                <span class="px-2 py-0.5 bg-gray-800 rounded">{{ article.source }}</span>
+                {% if article.published_at %}
+                <span>{{ article.published_at[:10] if article.published_at is string else article.published_at }}</span>
+                {% endif %}
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="bg-gray-900 rounded-lg p-8 border border-gray-800 text-center text-gray-500">
+        <p class="text-sm">No matching news found.</p>
+    </div>
+    {% endif %}
+</div>
+
+<!-- CVE Results -->
+<div class="mb-10">
+    <div class="flex items-center justify-between mb-4">
+        <h2 class="text-lg font-semibold">CVE <span class="text-gray-500 font-normal text-sm">({{ cves|length }})</span></h2>
+        {% if cves|length >= 20 %}
+        <a href="/cves?search={{ q }}" class="text-sm text-emerald-400 hover:text-emerald-300 transition">View all &rarr;</a>
+        {% endif %}
+    </div>
+
+    {% if cves %}
+    <!-- Mobile: Cards -->
+    <div class="md:hidden space-y-3">
+        {% for cve in cves %}
+        <a href="/cves/{{ cve.cve_id }}" class="block bg-gray-900 rounded-lg p-4 border border-gray-800 hover:border-emerald-600 transition">
+            <div class="flex items-center justify-between mb-2">
+                <span class="font-mono text-sm font-semibold text-white">{{ cve.cve_id }}</span>
+                {% if cve.severity %}
+                <span class="px-2 py-0.5 rounded text-xs font-medium border severity-{{ cve.severity|lower }}">
+                    {{ cve.severity }}{% if cve.cvss_score %} ({{ cve.cvss_score }}){% endif %}
+                </span>
+                {% endif %}
+            </div>
+            <p class="text-sm text-gray-400 line-clamp-2">{{ cve.description_ko or cve.description or '' }}</p>
+            {% if cve.is_kev %}
+            <span class="inline-block mt-2 px-2 py-0.5 bg-red-900 text-red-400 text-xs rounded">KEV</span>
+            {% endif %}
+        </a>
+        {% endfor %}
+    </div>
+
+    <!-- Desktop: Table -->
+    <div class="hidden md:block overflow-x-auto">
+        <table class="w-full text-sm">
+            <thead>
+                <tr class="border-b border-gray-800 text-left text-gray-400">
+                    <th class="pb-3 pr-4">CVE ID</th>
+                    <th class="pb-3 pr-4">Severity</th>
+                    <th class="pb-3 pr-4">Description</th>
+                    <th class="pb-3">KEV</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for cve in cves %}
+                <tr class="border-b border-gray-800/50 hover:bg-gray-900 transition">
+                    <td class="py-3 pr-4">
+                        <a href="/cves/{{ cve.cve_id }}" class="font-mono text-emerald-400 hover:text-emerald-300 transition">{{ cve.cve_id }}</a>
+                    </td>
+                    <td class="py-3 pr-4">
+                        {% if cve.severity %}
+                        <span class="px-2 py-0.5 rounded text-xs font-medium border severity-{{ cve.severity|lower }}">
+                            {{ cve.severity }}{% if cve.cvss_score %} ({{ cve.cvss_score }}){% endif %}
+                        </span>
+                        {% endif %}
+                    </td>
+                    <td class="py-3 pr-4 text-gray-400 max-w-md truncate">{{ cve.description_ko or cve.description or '' }}</td>
+                    <td class="py-3">
+                        {% if cve.is_kev %}
+                        <span class="px-2 py-0.5 bg-red-900 text-red-400 text-xs rounded">KEV</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="bg-gray-900 rounded-lg p-8 border border-gray-800 text-center text-gray-500">
+        <p class="text-sm">No matching CVEs found.</p>
+    </div>
+    {% endif %}
+</div>
+
+{% elif q is defined %}
+<div class="bg-gray-900 rounded-lg p-12 border border-gray-800 text-center text-gray-500">
+    <p class="text-lg mb-2">Enter a search term</p>
+    <p class="text-sm">Search across news articles and CVE vulnerabilities in English or Korean.</p>
+</div>
+{% endif %}
+
+{% endblock %}

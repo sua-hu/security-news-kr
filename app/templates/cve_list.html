@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% block title %}CVE List - Security News KR{% endblock %}
+{% block content %}
+
+<div class="flex items-center justify-between mb-6">
+    <h1 class="text-2xl font-bold">CVE Database</h1>
+    <span class="text-sm text-gray-500">{{ total }} CVEs</span>
+</div>
+
+<!-- Search & Filters -->
+<div class="space-y-3 mb-6">
+    <form action="/cves" method="get">
+        {% if severity %}<input type="hidden" name="severity" value="{{ severity }}">{% endif %}
+        <div class="flex">
+            <input type="text" name="search" value="{{ search }}" placeholder="CVE ID or keyword..."
+                   class="flex-1 px-4 py-2 bg-gray-900 border border-gray-700 rounded-l-md text-sm focus:outline-none focus:border-emerald-500">
+            <button type="submit" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 rounded-r-md text-sm transition">Search</button>
+        </div>
+    </form>
+    <div class="flex flex-wrap gap-2">
+        <a href="/cves{% if search %}?search={{ search }}{% endif %}"
+           class="px-3 py-1.5 rounded-md text-sm transition {% if not severity %}bg-emerald-600 text-white{% else %}bg-gray-800 text-gray-400 hover:bg-gray-700{% endif %}">All</a>
+        {% for sev in ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'] %}
+        <a href="/cves?severity={{ sev }}{% if search %}&search={{ search }}{% endif %}"
+           class="px-3 py-1.5 rounded-md text-sm transition {% if severity == sev %}bg-emerald-600 text-white{% else %}bg-gray-800 text-gray-400 hover:bg-gray-700{% endif %}">{{ sev }}</a>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Mobile: Card Layout -->
+<div class="md:hidden space-y-3">
+    {% for cve in cves %}
+    <a href="/cves/{{ cve.cve_id }}" class="block bg-gray-900 rounded-lg p-4 border border-gray-800 hover:border-emerald-600 transition">
+        <div class="flex items-center justify-between mb-2">
+            <span class="font-mono text-sm text-emerald-400">{{ cve.cve_id }}</span>
+            <div class="flex items-center gap-2">
+                {% if cve.is_kev %}
+                <span class="text-xs px-1.5 py-0.5 bg-red-900 text-red-400 rounded">KEV</span>
+                {% endif %}
+                <span class="text-xs px-2 py-0.5 rounded border severity-{{ cve.severity|lower if cve.severity else 'unknown' }}">
+                    {{ cve.severity or 'N/A' }}
+                </span>
+            </div>
+        </div>
+        <p class="text-sm text-gray-300 line-clamp-2 mb-2">
+            {{ cve.description_ko or cve.description or '' }}
+        </p>
+        <div class="flex items-center gap-3 text-xs text-gray-500">
+            {% if cve.cvss_score %}<span class="font-mono">CVSS {{ cve.cvss_score }}</span>{% endif %}
+            <span>{{ cve.source }}</span>
+            {% if cve.published_at %}
+            <span>{{ cve.published_at[:10] if cve.published_at is string else cve.published_at }}</span>
+            {% endif %}
+        </div>
+    </a>
+    {% else %}
+    <div class="bg-gray-900 rounded-lg p-8 border border-gray-800 text-center text-gray-500">
+        <p class="text-lg mb-2">No CVEs found</p>
+        <p class="text-sm">Data collection is in progress or no results match your filter.</p>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Desktop: Table Layout -->
+<div class="hidden md:block bg-gray-900 rounded-lg border border-gray-800 overflow-hidden">
+    <table class="w-full text-sm">
+        <thead>
+            <tr class="border-b border-gray-800 text-gray-400">
+                <th class="px-4 py-3 text-left">CVE ID</th>
+                <th class="px-4 py-3 text-left">Severity</th>
+                <th class="px-4 py-3 text-left">CVSS</th>
+                <th class="px-4 py-3 text-left">Description</th>
+                <th class="px-4 py-3 text-left">Source</th>
+                <th class="px-4 py-3 text-left">Date</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for cve in cves %}
+            <tr class="border-b border-gray-800 hover:bg-gray-800/50 transition cursor-pointer"
+                onclick="window.location='/cves/{{ cve.cve_id }}'">
+                <td class="px-4 py-3">
+                    <span class="font-mono text-emerald-400">{{ cve.cve_id }}</span>
+                    {% if cve.is_kev %}
+                    <span class="ml-1 text-xs px-1.5 py-0.5 bg-red-900 text-red-400 rounded">KEV</span>
+                    {% endif %}
+                </td>
+                <td class="px-4 py-3">
+                    <span class="text-xs px-2 py-0.5 rounded border severity-{{ cve.severity|lower if cve.severity else 'unknown' }}">
+                        {{ cve.severity or 'N/A' }}
+                    </span>
+                </td>
+                <td class="px-4 py-3 font-mono">{{ cve.cvss_score if cve.cvss_score else '-' }}</td>
+                <td class="px-4 py-3 max-w-md">
+                    <p class="line-clamp-2 text-gray-300">{{ cve.description_ko or cve.description or '' }}</p>
+                </td>
+                <td class="px-4 py-3 text-gray-500">{{ cve.source }}</td>
+                <td class="px-4 py-3 text-gray-500 whitespace-nowrap">
+                    {{ cve.published_at[:10] if cve.published_at and cve.published_at is string else (cve.published_at or '') }}
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="6" class="px-4 py-12 text-center text-gray-500">
+                    <p class="text-lg mb-2">No CVEs found</p>
+                    <p class="text-sm">Data collection is in progress or no results match your filter.</p>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Pagination -->
+{% if total_pages > 1 %}
+<div class="flex justify-center mt-6 space-x-2">
+    {% if page > 1 %}
+    <a href="/cves?page={{ page - 1 }}{% if severity %}&severity={{ severity }}{% endif %}{% if search %}&search={{ search }}{% endif %}"
+       class="px-4 py-2 bg-gray-800 rounded-md hover:bg-gray-700 transition text-sm">Prev</a>
+    {% endif %}
+    {% for p in range(1, total_pages + 1) %}
+        {% if p == page %}
+        <span class="px-4 py-2 bg-emerald-600 rounded-md text-sm">{{ p }}</span>
+        {% elif p <= 3 or p >= total_pages - 2 or (p >= page - 1 and p <= page + 1) %}
+        <a href="/cves?page={{ p }}{% if severity %}&severity={{ severity }}{% endif %}{% if search %}&search={{ search }}{% endif %}"
+           class="px-4 py-2 bg-gray-800 rounded-md hover:bg-gray-700 transition text-sm">{{ p }}</a>
+        {% elif p == 4 or p == total_pages - 3 %}
+        <span class="px-2 py-2 text-gray-500 text-sm">...</span>
+        {% endif %}
+    {% endfor %}
+    {% if page < total_pages %}
+    <a href="/cves?page={{ page + 1 }}{% if severity %}&severity={{ severity }}{% endif %}{% if search %}&search={{ search }}{% endif %}"
+       class="px-4 py-2 bg-gray-800 rounded-md hover:bg-gray-700 transition text-sm">Next</a>
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}CISA KEV - Security News KR{% endblock %}
+{% block content %}
+
+<div class="mb-6">
+    <h1 class="text-2xl font-bold text-red-400">CISA Known Exploited Vulnerabilities</h1>
+    <p class="text-sm text-gray-500 mt-1">Actively exploited vulnerabilities requiring mandatory remediation</p>
+</div>
+
+<!-- Mobile: Card Layout -->
+<div class="md:hidden space-y-3">
+    {% for cve in cves %}
+    <a href="/cves/{{ cve.cve_id }}" class="block bg-gray-900 rounded-lg p-4 border border-red-900 hover:border-red-600 transition">
+        <div class="flex items-center justify-between mb-2">
+            <span class="font-mono text-sm text-red-400">{{ cve.cve_id }}</span>
+            {% if cve.cvss_score %}
+            <span class="text-xs font-mono text-gray-400">CVSS {{ cve.cvss_score }}</span>
+            {% endif %}
+        </div>
+        <p class="text-sm text-gray-300 line-clamp-2 mb-2">
+            {{ cve.description_ko or cve.description or '' }}
+        </p>
+        <div class="flex items-center justify-between text-xs">
+            {% if cve.kev_due_date %}
+            <span class="text-red-400 font-mono">Due: {{ cve.kev_due_date }}</span>
+            {% endif %}
+            {% if cve.published_at %}
+            <span class="text-gray-500">{{ cve.published_at[:10] if cve.published_at is string else cve.published_at }}</span>
+            {% endif %}
+        </div>
+    </a>
+    {% else %}
+    <div class="bg-gray-900 rounded-lg p-8 border border-gray-800 text-center text-gray-500">
+        <p class="text-lg mb-2">No KEV data yet</p>
+        <p class="text-sm">CISA KEV data is being collected. Please refresh shortly.</p>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Desktop: Table Layout -->
+<div class="hidden md:block bg-gray-900 rounded-lg border border-gray-800 overflow-hidden">
+    <table class="w-full text-sm">
+        <thead>
+            <tr class="border-b border-gray-800 text-gray-400">
+                <th class="px-4 py-3 text-left">CVE ID</th>
+                <th class="px-4 py-3 text-left">CVSS</th>
+                <th class="px-4 py-3 text-left">Description</th>
+                <th class="px-4 py-3 text-left">Due Date</th>
+                <th class="px-4 py-3 text-left">Added</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for cve in cves %}
+            <tr class="border-b border-gray-800 hover:bg-gray-800/50 transition cursor-pointer"
+                onclick="window.location='/cves/{{ cve.cve_id }}'">
+                <td class="px-4 py-3"><span class="font-mono text-red-400">{{ cve.cve_id }}</span></td>
+                <td class="px-4 py-3 font-mono">{{ cve.cvss_score if cve.cvss_score else '-' }}</td>
+                <td class="px-4 py-3 max-w-lg">
+                    <p class="line-clamp-2 text-gray-300">{{ cve.description_ko or cve.description or '' }}</p>
+                </td>
+                <td class="px-4 py-3 text-red-400 whitespace-nowrap font-mono">{{ cve.kev_due_date or '-' }}</td>
+                <td class="px-4 py-3 text-gray-500 whitespace-nowrap">
+                    {{ cve.published_at[:10] if cve.published_at and cve.published_at is string else (cve.published_at or '') }}
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="5" class="px-4 py-12 text-center text-gray-500">
+                    <p class="text-lg mb-2">No KEV data yet</p>
+                    <p class="text-sm">CISA KEV data is being collected. Please refresh shortly.</p>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% if page > 1 %}
+<div class="flex justify-center mt-6">
+    <a href="/kev?page={{ page - 1 }}" class="px-4 py-2 bg-gray-800 rounded-md hover:bg-gray-700 transition text-sm">Previous</a>
+</div>
+{% endif %}
+{% endblock %}
