@@ -93,6 +93,29 @@ async def insert_article(source: str, title: str, summary: str, url: str,
             logger.warning(f"Failed to insert article '{url}': {e}")
 
 
+async def batch_insert_articles(articles: list) -> int:
+    """Batch insert articles. Each item: (source, title, summary, url, published_at).
+    Returns number of rows inserted."""
+    if not articles:
+        return 0
+    async with _conn() as conn:
+        try:
+            cursor = await conn.execute("SELECT COUNT(*) FROM articles")
+            before = (await cursor.fetchone())[0]
+            await conn.executemany(
+                """INSERT OR IGNORE INTO articles (source, title, summary, url, published_at)
+                   VALUES (?, ?, ?, ?, ?)""",
+                articles,
+            )
+            await conn.commit()
+            cursor = await conn.execute("SELECT COUNT(*) FROM articles")
+            after = (await cursor.fetchone())[0]
+            return after - before
+        except Exception as e:
+            logger.warning(f"Batch insert articles failed: {e}")
+            return 0
+
+
 async def get_articles(limit: int = 20, offset: int = 0, source: Optional[str] = None,
                        search: Optional[str] = None):
     async with _conn() as db:
@@ -174,6 +197,32 @@ async def insert_cve(cve_id: str, description: str, severity: str,
             await db.commit()
         except Exception as e:
             logger.warning(f"Failed to insert CVE '{cve_id}': {e}")
+
+
+async def batch_insert_cves(cves: list) -> int:
+    """Batch insert CVEs. Each item: (cve_id, description, severity, cvss_score, source,
+    affected_products, references_json, published_at, is_kev, kev_due_date).
+    Returns number of rows inserted."""
+    if not cves:
+        return 0
+    async with _conn() as conn:
+        try:
+            cursor = await conn.execute("SELECT COUNT(*) FROM cves")
+            before = (await cursor.fetchone())[0]
+            await conn.executemany(
+                """INSERT OR IGNORE INTO cves
+                   (cve_id, description, severity, cvss_score, source,
+                    affected_products, references_json, published_at, is_kev, kev_due_date)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                cves,
+            )
+            await conn.commit()
+            cursor = await conn.execute("SELECT COUNT(*) FROM cves")
+            after = (await cursor.fetchone())[0]
+            return after - before
+        except Exception as e:
+            logger.warning(f"Batch insert CVEs failed: {e}")
+            return 0
 
 
 async def get_cves(limit: int = 20, offset: int = 0, severity: Optional[str] = None,

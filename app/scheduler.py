@@ -7,6 +7,8 @@ from app.collectors.nvd import collect_nvd_cves
 from app.collectors.cisa_kev import collect_cisa_kev
 from app.collectors.rss_feeds import collect_rss_feeds
 from app.collectors.github_advisory import collect_github_advisories
+from app.collectors.exploit_db import collect_exploit_db
+from app.collectors.vulnrichment import collect_vulnrichment
 from app.translator import translate_untranslated_articles, translate_untranslated_cves
 
 logger = logging.getLogger(__name__)
@@ -18,38 +20,39 @@ _last_run_status = None
 
 
 async def collect_and_translate():
-    """Collect from all sources, then translate. Each collector is isolated."""
+    """Collect from all sources in parallel, then translate. Each collector is isolated."""
     global _last_run_time, _last_run_status
     start = time.time()
-    logger.info("Starting collection cycle...")
+    logger.info("Starting collection cycle (all parallel)...")
     has_failure = False
 
-    # 1) Fast collectors (RSS, GitHub, CISA KEV)
-    collectors = [
-        ("RSS", collect_rss_feeds),
-        ("GitHub Advisory", collect_github_advisories),
-        ("CISA KEV", collect_cisa_kev),
-    ]
-    for name, collector in collectors:
-        try:
-            await collector()
-        except Exception as e:
-            logger.error(f"{name} collector failed: {e}")
-            has_failure = True
+    # Phase 1: ALL collectors in parallel for maximum speed
+    collector_tasks = {
+        "RSS": collect_rss_feeds(),
+        "GitHub Advisory": collect_github_advisories(),
+        "CISA KEV": collect_cisa_kev(),
+        "NVD": collect_nvd_cves(),
+        "Exploit-DB": collect_exploit_db(),
+        "Vulnrichment": collect_vulnrichment(),
+    }
 
-    # 2) Translation + NVD (slow) in parallel
+    results = await asyncio.gather(
+        *collector_tasks.values(),
+        return_exceptions=True,
+    )
+
+    for name, result in zip(collector_tasks.keys(), results):
+        if isinstance(result, Exception):
+            logger.error(f"{name} collector failed: {result}")
+            has_failure = True
+        else:
+            logger.info(f"{name}: collected {result} items")
+
+    # Phase 2: Translation after collection completes
     try:
-        results = await asyncio.gather(
-            _translate_all(),
-            collect_nvd_cves(),
-            return_exceptions=True,
-        )
-        for r in results:
-            if isinstance(r, Exception):
-                logger.error(f"Parallel task failed: {r}")
-                has_failure = True
+        await _translate_all()
     except Exception as e:
-        logger.error(f"Parallel translate/NVD error: {e}")
+        logger.error(f"Translation error: {e}")
         has_failure = True
 
     elapsed = time.time() - start
@@ -79,7 +82,7 @@ def start_scheduler():
     scheduler.add_job(collect_and_translate, "interval", minutes=10, id="collect_all",
                       replace_existing=True, max_instances=1)
     scheduler.start()
-    logger.info("Scheduler started")
+    logger.info("Scheduler started (10 min interval, all collectors parallel)")
 
 
 def stop_scheduler():

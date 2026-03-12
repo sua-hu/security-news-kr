@@ -9,8 +9,11 @@ from app import database as db
 logger = logging.getLogger(__name__)
 
 
-async def collect_github_advisories(per_page: int = 100, max_pages: int = 5):
-    """Collect security advisories from GitHub Advisory Database with pagination."""
+async def collect_github_advisories(per_page: int = 100, max_pages: int = 15):
+    """Collect security advisories from GitHub Advisory Database with pagination.
+
+    Increased from 5 to 15 pages (up to 1500 advisories per cycle).
+    """
     logger.info("Collecting GitHub Advisories...")
     collected = 0
 
@@ -38,6 +41,7 @@ async def collect_github_advisories(per_page: int = 100, max_pages: int = 5):
             if not advisories:
                 break
 
+            cves_batch = []
             for adv in advisories:
                 ghsa_id = adv.get("ghsa_id", "")
                 cve_id = adv.get("cve_id") or ghsa_id
@@ -77,22 +81,21 @@ async def collect_github_advisories(per_page: int = 100, max_pages: int = 5):
                 raw_refs = adv.get("references", [])[:5]
                 refs = [r if isinstance(r, str) else r.get("url", "") for r in raw_refs]
 
-                await db.insert_cve(
-                    cve_id=cve_id,
-                    description=desc_text,
-                    severity=severity,
-                    cvss_score=cvss_score,
-                    source="github",
-                    affected_products=json.dumps(affected) if affected else None,
-                    references_json=json.dumps(refs) if refs else None,
-                    published_at=pub_date,
-                )
-                collected += 1
+                cves_batch.append((
+                    cve_id, desc_text, severity, cvss_score, "github",
+                    json.dumps(affected) if affected else None,
+                    json.dumps(refs) if refs else None,
+                    pub_date, False, None,
+                ))
+
+            if cves_batch:
+                page_count = await db.batch_insert_cves(cves_batch)
+                collected += page_count
 
             logger.info(f"GitHub Advisory: Page {page_num}, {collected} so far")
             if len(advisories) < per_page:
                 break
-            await asyncio.sleep(1)
+            await asyncio.sleep(0.5 if GITHUB_TOKEN else 1)
 
       await db.log_collection("github_advisory", "success", collected)
       logger.info(f"GitHub Advisory: Collected {collected} advisories total")
